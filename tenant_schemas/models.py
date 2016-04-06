@@ -3,13 +3,29 @@ from django.conf import settings
 from django.db import models, connection
 from django.core.management import call_command
 
+from django.utils.encoding import python_2_unicode_compatible
 from tenant_schemas.postgresql_backend.base import _check_schema_name
 from tenant_schemas.signals import post_schema_sync
 from tenant_schemas.utils import django_is_in_test_mode, schema_exists
 from tenant_schemas.utils import get_public_schema_name
 
 
-class TenantMixin(models.Model):
+@python_2_unicode_compatible
+class Domain(models.Model):
+    tenant = models.ForeignKey("tenant_schemas.Tenant",
+                               related_name='domains')
+    domain = models.CharField(max_length=128, unique=True)
+
+    def __str__(self):
+        return self.domain
+
+    def save(self, *args, **kwargs):
+        self.domain = self.domain.lower()
+        super(Domain, self).save(*args, **kwargs)
+
+
+@python_2_unicode_compatible
+class Tenant(models.Model):
     """
     All tenant models must inherit this class.
     """
@@ -27,12 +43,35 @@ class TenantMixin(models.Model):
     to be automatically created upon save.
     """
 
-    domain_url = models.CharField(max_length=128, unique=True)
-    schema_name = models.CharField(max_length=63, unique=True,
+    schema_name = models.CharField(max_length=63,
+                                   unique=True,
                                    validators=[_check_schema_name])
 
-    class Meta:
-        abstract = True
+    name = models.CharField(max_length=100)
+    created_on = models.DateField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    def get_domains(self):
+        """ Return list of domains for tenant """
+        return [d.domain for d in self.domains.all()]
+
+    @classmethod
+    def get_for_domain(cls, domain):
+        """ Get tenant for domain """
+        result = Domain.objects.filter(domain=domain.lower())
+        if not result:
+            return None
+        return result[0].tenant
+
+    def add_domain(self, domain):
+        domain = domain.lower()
+        return Domain.objects.create(tenant=self, domain=domain)
+
+    def remove_domain(self, domain):
+        domain = domain.lower()
+        return Domain.objects.filter(tenant=self, domain=domain).delete()
 
     def save(self, verbosity=1, *args, **kwargs):
         is_new = self.pk is None
@@ -45,12 +84,12 @@ class TenantMixin(models.Model):
                             "the public schema. Current schema is %s."
                             % connection.schema_name)
 
-        super(TenantMixin, self).save(*args, **kwargs)
+        super(Tenant, self).save(*args, **kwargs)
 
         if is_new and self.auto_create_schema:
             try:
                 self.create_schema(check_if_exists=True, verbosity=verbosity)
-                post_schema_sync.send(sender=TenantMixin, tenant=self)
+                post_schema_sync.send(sender=Tenant, tenant=self)
             except:
                 # We failed creating the tenant, delete what we created and
                 # re-raise the exception
@@ -71,7 +110,7 @@ class TenantMixin(models.Model):
             cursor = connection.cursor()
             cursor.execute('DROP SCHEMA %s CASCADE' % self.schema_name)
 
-        super(TenantMixin, self).delete(*args, **kwargs)
+        super(Tenant, self).delete(*args, **kwargs)
 
     def create_schema(self, check_if_exists=False, sync_schema=True,
                       verbosity=1):

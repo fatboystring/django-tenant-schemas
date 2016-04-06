@@ -28,8 +28,9 @@ class TenantMiddleware(object):
         hostname = self.hostname_from_request(request)
 
         TenantModel = get_tenant_model()
+
         try:
-            request.tenant = TenantModel.objects.get(domain_url=hostname)
+            request.tenant = TenantModel.get_for_domain(hostname)
             connection.set_tenant(request.tenant)
         except TenantModel.DoesNotExist:
             raise self.TENANT_NOT_FOUND_EXCEPTION(

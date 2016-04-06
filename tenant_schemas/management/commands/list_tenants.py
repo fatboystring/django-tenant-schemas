@@ -7,10 +7,11 @@ from tenant_schemas.utils import get_tenant_model
 
 class Command(BaseCommand):
     def handle(self, *args, **options):
-        columns = ('schema_name', 'domain_url')
 
-        TenantModel = get_tenant_model()
-        all_tenants = TenantModel.objects.values_list(*columns)
+        model = get_tenant_model()
+        all_tenants = [(t.schema_name, ', '.join(t.get_domains()))
+                       for t
+                       in model.objects.all()]
 
         out = csv.writer(sys.stdout, dialect=csv.excel_tab)
         for tenant in all_tenants:
