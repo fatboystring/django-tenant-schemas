@@ -58,12 +58,18 @@ class Tenant(models.Model):
         return [d.domain for d in self.domains.all()]
 
     @classmethod
+    def get_public(cls):
+        """ Return public tenant """
+        return cls.objects.get(schema_name=settings.PUBLIC_SCHEMA_NAME)
+
+    @classmethod
     def get_for_domain(cls, domain):
         """ Get tenant for domain """
         result = Domain.objects.filter(domain=domain.lower())
-        if not result:
-            return None
-        return result[0].tenant
+        if result:
+            return result[0].tenant
+
+        return cls.get_public()
 
     def add_domain(self, domain):
         domain = domain.lower()
