@@ -72,8 +72,10 @@ class Tenant(models.Model):
         return cls.get_public()
 
     def add_domain(self, domain):
+        """ Add specific domain for tenant """
         domain = domain.lower()
-        return Domain.objects.create(tenant=self, domain=domain)
+        obj, created = Domain.objects.get_or_create(tenant=self, domain=domain)
+        return obj
 
     def remove_domain(self, domain):
         domain = domain.lower()
