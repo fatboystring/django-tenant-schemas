@@ -18,7 +18,7 @@ class TenantSyncRouter(object):
             # In django <1.7 the `app_label` parameter is actually `model`
             app_label = app_label._meta.app_label
 
-        if connection.schema_name == get_public_schema_name():
+        if getattr(connection, 'schema_name', None) == get_public_schema_name():
             if app_label not in app_labels(settings.SHARED_APPS):
                 return False
         else:
